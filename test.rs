@@ -9,4 +9,5 @@ fn main() {
   keyargs!("coucou", Some("yop"), None);
   keyargs!("coucou", Some("yop"));
   keyargs!("coucou");
+  keyargs!("coucou", opt1="test1");
 }
