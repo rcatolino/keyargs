@@ -21,35 +21,56 @@ pub fn macro_registrar(register: |ast::Name, SyntaxExtension|) {
   register(token::intern("keyargs"), NormalTT(expander, None))
 }
 
-fn parse_expr(parser: &mut parser::Parser) -> @ast::Expr {
-  parser.parse_expr()
+struct Function {
+  name: @ast::Expr,
+  options: ~[ast::Name],
+  mandatory_nb: uint,
+}
+
+fn expand_args(cx: &mut ExtCtxt, exprs: Vec<@ast::Expr>) -> Vec<@ast::Expr> {
+
+  // We build the Function ourselves until the function-def synext is coded.
+  let fun = Function {
+    name: quote_expr!(&mut *cx, test),
+    options: ~[token::intern("opt1"), token::intern("opt2")],
+    mandatory_nb: 1,
+  };
+
+  let mut key_started = false;
+  let mut expanded = Vec::with_capacity(fun.mandatory_nb + fun.options.len());
+  for (arg, consumed) in exprs.iter().zip(range(0, exprs.len())) {
+    if consumed < fun.mandatory_nb {
+      expanded.push(*arg);
+    } else {
+      match cx.expand_expr(*arg).node {
+        ast::ExprAssign(name, val) => {
+          cx.span_note(name.span, format!("{:?}", name));
+          cx.span_note(val.span, format!(" -> {:?}", val));
+          match name.node {
+            ast::ExprPath(ref path) => cx.span_note(path.span, format!("{:?}", path)),
+            _ => cx.span_err(name.span,
+                             format!("expected argument name but found expression `{}`",
+                                     syntax::print::pprust::expr_to_str(name))),
+
+          }
+        }
+        _ => (),
+      }
+    }
+  }
+
+  expanded
 }
 
 fn keyargs(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree]) -> Box<MacResult> {
-  use syntax::ast::TTDelim;
   let mut parser = parse::new_parser_from_tts(cx.parse_sess(), cx.cfg(),
                                               Vec::from_slice(tts));
 
   let exprs = parser.parse_seq_to_end(&token::EOF,
                                       common::seq_sep_trailing_disallowed(token::COMMA),
-                                      parse_expr);
-  for arg in exprs.iter() {
-    match cx.expand_expr(*arg).node {
-      ast::ExprAssign(name, val) => {
-        cx.span_note(name.span, format!("{:?}", name));
-        cx.span_note(val.span, format!(" -> {:?}", val));
-        match name.node {
-          ast::ExprPath(ref path) => cx.span_note(path.span, format!("{:?}", path)),
-          _ => cx.span_err(name.span,
-                           format!("expected argument name but found expression `{}`",
-                                   syntax::print::pprust::expr_to_str(name))),
+                                      |p| p.parse_expr());
 
-        }
-      }
-      _ => (),
-    }
-  }
-
+  expand_args(cx, exprs);
   MacExpr::new(quote_expr!(cx, println!("test")))
 }
 
