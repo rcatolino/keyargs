@@ -5,9 +5,10 @@
 #[phase(syntax)] extern crate keyargs;
 
 fn main() {
-  keyargs!("coucou", None, Some(1));
-  keyargs!("coucou", Some("yop"), None);
+  keyargs!("coucou", 1);
   keyargs!("coucou", Some("yop"));
+  keyargs!("coucou", "yop");
   keyargs!("coucou");
-  keyargs!("coucou", opt1="test1");
+  keyargs!("coucou", opt1="test1", 3);
+  keyargs!("coucou", "t1", opt1=4);
 }

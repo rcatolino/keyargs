@@ -12,6 +12,7 @@ use syntax::ext::base::{
 use syntax::ext::build::AstBuilder;
 use syntax::parse;
 use syntax::parse::{parser, token, common};
+use syntax::print::pprust;
 
 #[macro_registrar]
 #[doc(hidden)]
@@ -27,7 +28,8 @@ struct Function {
   mandatory_nb: uint,
 }
 
-fn expand_args(cx: &mut ExtCtxt, exprs: Vec<@ast::Expr>) -> Vec<@ast::Expr> {
+fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
+               -> (@ast::Expr, Vec<@ast::Expr>) {
 
   // We build the Function ourselves until the function-def synext is coded.
   let fun = Function {
@@ -44,22 +46,34 @@ fn expand_args(cx: &mut ExtCtxt, exprs: Vec<@ast::Expr>) -> Vec<@ast::Expr> {
     } else {
       match cx.expand_expr(*arg).node {
         ast::ExprAssign(name, val) => {
-          cx.span_note(name.span, format!("{:?}", name));
-          cx.span_note(val.span, format!(" -> {:?}", val));
+          key_started = true;
           match name.node {
             ast::ExprPath(ref path) => cx.span_note(path.span, format!("{:?}", path)),
             _ => cx.span_err(name.span,
                              format!("expected argument name but found expression `{}`",
-                                     syntax::print::pprust::expr_to_str(name))),
+                                     pprust::expr_to_str(name))),
 
           }
         }
-        _ => (),
+        _ => if key_started {
+          // The keywords are always last position, we can't have non-keywords params
+          // once key_started.
+          cx.span_err(arg.span, format!("expected keyword argument but found `{}`",
+                                pprust::expr_to_str(*arg)));
+        } else {
+          // Push the expr after wrapping it in a Some()
+          expanded.push(cx.expr_some(arg.span, *arg));
+        },
       }
     }
   }
 
-  expanded
+  while expanded.len() < expanded.capacity() {
+    // Add None for all the leftovers.
+    expanded.push(cx.expr_none(sp));
+  }
+
+  (fun.name, expanded)
 }
 
 fn keyargs(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree]) -> Box<MacResult> {
@@ -70,7 +84,9 @@ fn keyargs(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree]) -> Box<M
                                       common::seq_sep_trailing_disallowed(token::COMMA),
                                       |p| p.parse_expr());
 
-  expand_args(cx, exprs);
+  let (name, expanded) = expand_args(cx, sp, exprs);
+  let call = cx.expr_call(sp, name, expanded);
+  cx.span_note(sp, format!("{}", pprust::expr_to_str(call)));
   MacExpr::new(quote_expr!(cx, println!("test")))
 }
 
