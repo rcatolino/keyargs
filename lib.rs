@@ -73,14 +73,9 @@ fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
   };
 
   let mut key_started = false;
-  let mut expanded = Vec::with_capacity(fun.mandatory_nb + fun.options.len());
+  let mut expanded: Vec<@ast::Expr> = Vec::with_capacity(fun.mandatory_nb + fun.options.len());
   let mut named_options = llist::Nil;
   for (arg, consumed) in exprs.iter().zip(range(0, exprs.len())) {
-    if consumed < fun.mandatory_nb {
-      expanded.push(*arg);
-      continue;
-    }
-
     // Add the positional arguments, and build a list of the keyword arguments.
     match cx.expand_expr(*arg).node {
       ast::ExprAssign(name, val) => {
@@ -116,11 +111,20 @@ fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
         cx.span_err(arg.span, format!("expected keyword argument but found `{}`",
                               pprust::expr_to_str(*arg)));
         return None;
+      } else if consumed < fun.mandatory_nb {
+        // We are still consuming mandatory args.
+        expanded.push(*arg);
       } else {
-        // Push the expr after wrapping it in a Some()
+        // This is an optional arg, push the expr after wrapping it in a Some()
         expanded.push(cx.expr_some(arg.span, *arg));
       },
     }
+  }
+
+  // Check that all mandatory arguments were given.
+  if expanded.len() < fun.mandatory_nb {
+    cx.span_err(sp, "missing mandatory argument at call site.");
+    return None;
   }
 
   // Add the keyword arguments and the leftovers.

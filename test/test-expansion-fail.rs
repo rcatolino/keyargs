@@ -4,5 +4,10 @@
 extern crate testlib;
 
 fn main() {
-  keyargs!();
+  keyargs!();                   //~ error: missing mandatory argument at call site.
+  keyargs!(opt1="option");      //~ error: missing mandatory argument at call site.
+  keyargs!("man", opt3="test"); //~ error: invalid keyword argument `opt3`.
+  keyargs!("man", "test", opt1="test2"); //~ error: keyword argument `opt1` was already given as a positional argument. //~note: corresponding positional argument is
+  keyargs!("man", "test", opt4=4); //~ error: invalid keyword argument `opt4`.
+  keyargs!("man", opt1="test", opt1="test2"); //~ error: invalid keyword argument `opt4`.
 }
