@@ -1,7 +1,5 @@
 *~
 .*.swp
 doc/
-*.so
-*.rlib
-*.a
-test
+bin/
+lib/

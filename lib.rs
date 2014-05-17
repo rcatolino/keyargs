@@ -53,11 +53,6 @@ struct Function {
 
 fn find_opt(fun: &Function, path: &ast::Path, last_idx: uint) -> Option<uint> {
   for (opt, idx) in fun.options.iter().zip(range(fun.mandatory_nb, last_idx)) {
-    /*
-    cx.span_note(path.span, format!("option name : {}, node name : {}",
-                                   opt, path.segments.iter().map(|seg| seg.identifier.name)
-                                   .collect::<Vec<ast::Name>>()));
-                                   */
     if path.segments.iter().map(|seg| seg.identifier.name).collect::<Vec<ast::Name>>() == *opt {
       return Some(idx);
     }
@@ -86,6 +81,7 @@ fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
       continue;
     }
 
+    // Add the positional arguments, and build a list of the keyword arguments.
     match cx.expand_expr(*arg).node {
       ast::ExprAssign(name, val) => {
         key_started = true;
@@ -127,8 +123,8 @@ fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
     }
   }
 
+  // Add the keyword arguments and the leftovers.
   for i in range(expanded.len(), expanded.capacity()) {
-    // Add the named options and the leftovers.
     named_options = match named_options {
       Nil => {
         expanded.push(cx.expr_none(sp));
