@@ -11,7 +11,10 @@ TEST_LIB:=$(LIB_DIR)/$(shell rustc --crate-file-name testlib.rs | grep ".so")
 test: lib $(TEST_DIR)/*.rs
 
 $(TEST_DIR)/%.rs : lib
-	rustc $@ --out-dir $(BIN_DIR) -L $(LIB_DIR)
+	rustc $@ --out-dir $(BIN_DIR) -L $(LIB_DIR) |& sed -f output-filter.sed > output.tmp
+	@sed -f filter.sed $@ > expected.tmp
+	@diff output.tmp expected.tmp
+	@-rm -f output.tmp expected.tmp
 
 lib: $(SYNEXT_LIB) $(TEST_LIB)
 

@@ -22,14 +22,20 @@ mod llist {
   }
 
   impl Llist {
-    pub fn insert(self, idx: uint, expr: @Expr) -> Llist {
+    // Return the new first element if this keyword argument hasn't been given yet,
+    // or return the expression corresponding to the previous argument with this keyword.
+    // (we need to return the previous @Expr) for the error message.
+    pub fn insert(self, idx: uint, expr: @Expr) -> Result<Llist, @Expr> {
       loop {
         match self {
-          Nil => return Cons(idx, expr, box Nil),
+          Nil => return Ok(Cons(idx, expr, box Nil)),
           Cons(lidx, lexpr, next) => match lidx.cmp(&idx) {
-            Less => return Cons(lidx, lexpr, box next.insert(idx, expr)),
-            Greater => return Cons(idx, lexpr, box Cons(lidx, lexpr, next)),
-            Equal => fail!("Option for idx {} has already been inserted!", lidx),
+            Less => return match next.insert(idx, expr) {
+              Ok(cons) => Ok(Cons(lidx, lexpr, box cons)),
+              Err(expr) => Err(expr),
+            },
+            Greater => return Ok(Cons(idx, lexpr, box Cons(lidx, lexpr, next))),
+            Equal => return Err(lexpr), // The option has already been given.
           }
         }
       }
@@ -87,10 +93,19 @@ fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
                 cx.span_err(name.span, format!("keyword argument `{}` was already given \
                                                as a positional argument.",
                                                pprust::expr_to_str(name)));
-                cx.span_note(expanded.get(idx).span, "corresponding positional argument is");
+                cx.span_note(expanded.get(idx).span, "corresponding positional argument is:");
                 return None;
               }
-              Some(idx) => named_options = named_options.insert(idx, val),
+              Some(idx) => named_options = match named_options.insert(idx, val) {
+                Ok(no) => no,
+                Err(expr) => {
+                  cx.span_err(name.span, format!("keyword argument `{}` has already \
+                                                 been given.",
+                                                 pprust::expr_to_str(name)));
+                  cx.span_note(expr.span, "its previous position is:");
+                  return None;
+                }
+              },
               None => {
                 cx.span_err(name.span, format!("invalid keyword argument `{}`.",
                                                pprust::expr_to_str(name)));
