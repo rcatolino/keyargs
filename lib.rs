@@ -47,8 +47,23 @@ pub fn macro_registrar(register: |ast::Name, SyntaxExtension|) {
 
 struct Function {
   name: @ast::Expr,
-  options: ~[ast::Name],
+  options: ~[Vec<ast::Name>],
   mandatory_nb: uint,
+}
+
+fn find_opt(fun: &Function, path: &ast::Path, last_idx: uint) -> Option<uint> {
+  for (opt, idx) in fun.options.iter().zip(range(fun.mandatory_nb, last_idx)) {
+    /*
+    cx.span_note(path.span, format!("option name : {}, node name : {}",
+                                   opt, path.segments.iter().map(|seg| seg.identifier.name)
+                                   .collect::<Vec<ast::Name>>()));
+                                   */
+    if path.segments.iter().map(|seg| seg.identifier.name).collect::<Vec<ast::Name>>() == *opt {
+      return Some(idx);
+    }
+  }
+
+  None
 }
 
 fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
@@ -58,7 +73,7 @@ fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
   // We build the Function ourselves until the function-def synext is coded.
   let fun = Function {
     name: quote_expr!(&mut *cx, test),
-    options: ~[token::intern("opt1"), token::intern("opt2")],
+    options: ~[vec!(token::intern("opt1")), vec!(token::intern("opt2"))],
     mandatory_nb: 1,
   };
 
@@ -74,12 +89,19 @@ fn expand_args(cx: &mut ExtCtxt, sp: codemap::Span, exprs: Vec<@ast::Expr>)
           key_started = true;
           match name.node {
             ast::ExprPath(ref path) => {
-              // TODO: insert in the right position instead of 0.
-              for opt in fun.options.iter() {
-                cx.span_note(path.span, format!("option name : {:?}, node name : {:?}",
-                                               opt, path));
+              match find_opt(&fun, path, expanded.capacity()) {
+                Some(idx) => {
+                  if idx < expanded.len() {
+                    cx.span_err(name.span, format!("keyword parameter `{}` was already given.",
+                                                   pprust::expr_to_str(name)));
+                    cx.span_note(expanded.get(idx).span,
+                                              "corresponding positional parameter is");
+                  }
+                  named_options = named_options.insert(idx, val);
+                }
+                None => cx.span_err(name.span, format!("invalid keyword argument `{}`.",
+                                                       pprust::expr_to_str(name))),
               }
-              named_options = named_options.insert(0, val);
             }
             _ => cx.span_err(name.span,
                              format!("expected argument name but found expression `{}`",
