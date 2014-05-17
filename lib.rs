@@ -34,7 +34,7 @@ mod llist {
               Ok(cons) => Ok(Cons(lidx, lexpr, box cons)),
               Err(expr) => Err(expr),
             },
-            Greater => return Ok(Cons(idx, lexpr, box Cons(lidx, lexpr, next))),
+            Greater => return Ok(Cons(idx, expr, box Cons(lidx, lexpr, next))),
             Equal => return Err(lexpr), // The option has already been given.
           }
         }
@@ -173,7 +173,6 @@ fn keyargs(cx: &mut ExtCtxt, sp: codemap::Span, tts: &[ast::TokenTree]) -> Box<M
   match expand_args(cx, sp, exprs) {
     Some((name, expanded)) => {
       let call = cx.expr_call(sp, name, expanded);
-      cx.span_note(sp, format!("{}", pprust::expr_to_str(call)));
       MacExpr::new(call)
     }
     None => MacExpr::new(quote_expr!(cx, ()))
